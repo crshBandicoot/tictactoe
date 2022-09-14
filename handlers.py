@@ -7,8 +7,8 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from keyboards import init_keyboard, get_keyboard_for_session
 from time import time_ns
-from db import Match, create_session, get_session, update_session, delete_session
-from funcs import row, turn
+from db import Match, create_session, get_session, update_session
+from funcs import winner, turn
 import os
 
 token = os.getenv('TOKEN')
@@ -57,15 +57,7 @@ async def join(message, state):
 
 async def match(message, state):
     async with state.proxy() as memory:
-
-        if row(memory['match_id']):
-            winner = ''
-            if row(memory['match_id']) == 'circles':
-                winner = 'нолики'
-            else:
-                winner = 'крестики'
-            await bot.send_message(message['from']['id'], f'Победили {winner}', reply_markup=init_keyboard)
-            await state.finish()
+        if winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
             return None
         if message['text'] == 'Обновить поле':
             await bot.send_message(message['from']['id'], 'Обновлено', reply_markup=get_keyboard_for_session(
@@ -79,14 +71,7 @@ async def match(message, state):
                     case 0:
                         match[cell] = 1
                         update_session(memory['match_id'], match)
-                        if row(memory['match_id']):
-                            winner = ''
-                            if row(memory['match_id']) == 'circles':
-                                winner = 'нолики'
-                            else:
-                                winner = 'крестики'
-                            await bot.send_message(message['from']['id'], f'Победили {winner}', reply_markup=init_keyboard)
-                            await state.finish()
+                        if winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
                             return None
                         await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
                                                reply_markup=get_keyboard_for_session(memory['match_id']))
@@ -105,14 +90,7 @@ async def match(message, state):
                     case 0:
                         match[cell] = 2
                         update_session(memory['match_id'], match)
-                        if row(memory['match_id']):
-                            winner = ''
-                            if row(memory['match_id']) == 'circles':
-                                winner = 'нолики'
-                            else:
-                                winner = 'крестики'
-                            await bot.send_message(message['from']['id'], f'Победили {winner}', reply_markup=init_keyboard)
-                            await state.finish()
+                        if winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
                             return None
                         await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
                                                reply_markup=get_keyboard_for_session(memory['match_id']))

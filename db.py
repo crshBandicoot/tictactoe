@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, create_engine
+from email.policy import default
+from sqlalchemy import Column, Integer, create_engine, Boolean
 from sqlalchemy.orm import declarative_base, Session
 
 
@@ -8,6 +9,7 @@ Base = declarative_base()
 class Match(Base):
     __tablename__ = 'session'
     id = Column(Integer, primary_key=True)
+    completed = Column(Boolean, default=False)
     _1 = Column(Integer, default=0)
     _2 = Column(Integer, default=0)
     _3 = Column(Integer, default=0)
@@ -41,6 +43,19 @@ def get_session(id):
             return [match._1, match._2, match._3, match._4, match._5, match._6, match._7, match._8, match._9]
         else:
             return False
+
+
+def get_session_complete(id):
+    with Session(engine) as session:
+        match = session.get(Match, id)
+        return match.completed
+
+
+def session_complete(id):
+    with Session(engine) as session:
+        match = session.get(Match, id)
+        match.complete = True
+        session.commit()
 
 
 def update_session(id, array):
