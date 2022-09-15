@@ -34,6 +34,7 @@ def create_session(id):
         match = Match(id=id)
         session.add_all([match])
         session.commit()
+        return True
 
 
 def get_session(id):
@@ -56,6 +57,7 @@ def session_complete(id):
         match = session.get(Match, id)
         match.complete = True
         session.commit()
+        return True
 
 
 def update_session(id, array):
@@ -63,9 +65,11 @@ def update_session(id, array):
         match = session.get(Match, id)
         match._1, match._2, match._3, match._4, match._5, match._6, match._7, match._8, match._9 = array
         session.commit()
+        return True
 
 
 def delete_session(id):
     with Session(engine) as session:
         session.delete(session.get(Match, id))
         session.commit()
+        return True

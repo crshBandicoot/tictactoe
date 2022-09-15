@@ -11,10 +11,13 @@ from db import Match, create_session, get_session, update_session
 from funcs import winner, turn
 import os
 
+
 token = os.getenv('TOKEN')
 bot = Bot(token)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+
+moves = {'circle': 1, 'cross': 2}
 
 
 class MatchState(StatesGroup):
@@ -58,49 +61,36 @@ async def join(message, state):
 async def match(message, state):
     async with state.proxy() as memory:
         if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
-            return None
+            return True
         if message['text'] == 'Обновить поле':
             await bot.send_message(message['from']['id'], 'Обновлено', reply_markup=get_keyboard_for_session(
                 memory['match_id']))
-            return None
-        if memory.state == 'MatchState:match_circle':
-            if turn(memory['match_id']) == 'circle':
-                match = get_session(memory['match_id'])
-                cell = int(message['text'][-2]) - 1
-                match match[cell]:
-                    case 0:
-                        match[cell] = 1
-                        update_session(memory['match_id'], match)
-                        if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
-                            return None
-                        await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
-                                               reply_markup=get_keyboard_for_session(memory['match_id']))
-                    case _:
-                        await bot.send_message(message['from']['id'], 'Эта клетка уже заполнена, выберите другую.',
-                                               reply_markup=get_keyboard_for_session(memory['match_id']))
+            return True
 
-            else:
-                await bot.send_message(message['from']['id'], 'Ждите своего хода.',
-                                       reply_markup=get_keyboard_for_session(memory['match_id']))
-        elif memory.state == 'MatchState:match_cross':
-            if turn(memory['match_id']) == 'cross':
-                match = get_session(memory['match_id'])
+        player = memory.state.split('_')[-1]
+        if turn(memory['match_id']) == player:
+            match = get_session(memory['match_id'])
+            if message['text'][-2].isdigit():
                 cell = int(message['text'][-2]) - 1
-                match match[cell]:
-                    case 0:
-                        match[cell] = 2
-                        update_session(memory['match_id'], match)
-                        if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
-                            return None
-                        await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
-                                               reply_markup=get_keyboard_for_session(memory['match_id']))
-                    case _:
-                        await bot.send_message(message['from']['id'], 'Эта клетка уже заполнена, выберите другую.',
-                                               reply_markup=get_keyboard_for_session(memory['match_id']))
-
             else:
-                await bot.send_message(message['from']['id'], 'Ждите своего хода.',
+                await bot.send_message(message['from']['id'], 'Неверный формат ввода',
                                        reply_markup=get_keyboard_for_session(memory['match_id']))
+                return False
+            match match[cell]:
+                case 0:
+                    match[cell] = moves[player]
+                    update_session(memory['match_id'], match)
+                    if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
+                        return None
+                    await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
+                                           reply_markup=get_keyboard_for_session(memory['match_id']))
+                case _:
+                    await bot.send_message(message['from']['id'], 'Эта клетка уже заполнена, выберите другую.',
+                                           reply_markup=get_keyboard_for_session(memory['match_id']))
+
+        else:
+            await bot.send_message(message['from']['id'], 'Ждите своего хода.',
+                                   reply_markup=get_keyboard_for_session(memory['match_id']))
 
 
 async def register_handlers(dp):
