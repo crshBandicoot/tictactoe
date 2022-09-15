@@ -1,4 +1,9 @@
 from db import get_session, get_session_complete, session_complete, delete_session
+from vosk import Model, KaldiRecognizer
+import wave
+import os
+
+model = Model('vosk_model')
 
 
 def turn(match_id):
@@ -37,6 +42,21 @@ async def winner(state, match_id, bot, user, reply_markup):
         await state.finish()
         if get_session_complete(match_id):
             delete_session(match_id)
+            for file in os.listdir('voices'):
+                if file.split('_')[0] == str(match_id):
+                    os.remove(os.path.join('voices', file))
         else:
             session_complete(match_id)
         return True
+
+
+def vosk_recognition(path):
+    with wave.open(path, 'rb') as audio:
+        recognizer = KaldiRecognizer(model, audio.getframerate())
+        while True:
+            data = audio.readframes(4000)
+            if len(data) == 0:
+                break
+            recognizer.AcceptWaveform(data)
+
+        return recognizer.FinalResult().split('"')[-2]

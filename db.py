@@ -55,7 +55,7 @@ def get_session_complete(id):
 def session_complete(id):
     with Session(engine) as session:
         match = session.get(Match, id)
-        match.complete = True
+        match.completed = True
         session.commit()
         return True
 

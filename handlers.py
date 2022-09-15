@@ -1,5 +1,5 @@
 from aiogram import Bot
-from aiogram.types import ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardRemove, ContentType
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
@@ -7,10 +7,10 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from keyboards import init_keyboard, get_keyboard_for_session
 from time import time_ns
-from db import Match, create_session, get_session, update_session
-from funcs import winner, turn
+from db import create_session, get_session, update_session
+from funcs import winner, turn, vosk_recognition
 import os
-
+from pydub import AudioSegment
 
 token = os.getenv('TOKEN')
 bot = Bot(token)
@@ -62,35 +62,73 @@ async def match(message, state):
     async with state.proxy() as memory:
         if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
             return True
-        if message['text'] == 'Обновить поле':
-            await bot.send_message(message['from']['id'], 'Обновлено', reply_markup=get_keyboard_for_session(
-                memory['match_id']))
-            return True
-
+        id = memory['match_id']
         player = memory.state.split('_')[-1]
-        if turn(memory['match_id']) == player:
-            match = get_session(memory['match_id'])
+        if message['text']:
+            if message['text'] == 'Обновить поле':
+                await bot.send_message(message['from']['id'], 'Обновлено', reply_markup=get_keyboard_for_session(
+                    memory['match_id']))
+                return True
             if message['text'][-2].isdigit():
                 cell = int(message['text'][-2]) - 1
             else:
                 await bot.send_message(message['from']['id'], 'Неверный формат ввода',
                                        reply_markup=get_keyboard_for_session(memory['match_id']))
                 return False
+
+        elif message['voice']:
+            await bot.download_file_by_id(message['voice']['file_id'], os.path.join('voices', str(id) + '_' + player + '.ogg'))
+            audio = AudioSegment.from_ogg(os.path.join(
+                'voices', str(id) + '_' + player + '.ogg'))
+            audio.set_sample_width(2).export(os.path.join(
+                'voices', str(id) + '_' + player + '.wav'), format='wav')
+            text = vosk_recognition(os.path.join(
+                'voices', str(id) + '_' + player + '.wav'))
+            match text:
+                case 'один':
+                    cell = 0
+                case 'два':
+                    cell = 1
+                case 'три':
+                    cell = 2
+                case 'четыре':
+                    cell = 3
+                case 'пять':
+                    cell = 4
+                case 'шесть':
+                    cell = 5
+                case 'семь':
+                    cell = 6
+                case 'восемь':
+                    cell = 7
+                case 'девять':
+                    cell = 8
+                case 'обновить поле':
+                    await bot.send_message(message['from']['id'], 'Обновлено', reply_markup=get_keyboard_for_session(
+                        memory['match_id']))
+                    return True
+                case _:
+                    await message.reply(f'Неизвестная команда:\n{text}')
+                    return False
+            await message.reply(text.capitalize())
+
+        if turn(id) == player:
+            match = get_session(id)
             match match[cell]:
                 case 0:
                     match[cell] = moves[player]
-                    update_session(memory['match_id'], match)
-                    if await winner(state, memory['match_id'], bot, message['from']['id'], init_keyboard):
+                    update_session(id, match)
+                    if await winner(state, id, bot, message['from']['id'], init_keyboard):
                         return None
                     await bot.send_message(message['from']['id'], 'Ход сделан, ждите оппонента.',
-                                           reply_markup=get_keyboard_for_session(memory['match_id']))
+                                           reply_markup=get_keyboard_for_session(id))
                 case _:
                     await bot.send_message(message['from']['id'], 'Эта клетка уже заполнена, выберите другую.',
-                                           reply_markup=get_keyboard_for_session(memory['match_id']))
+                                           reply_markup=get_keyboard_for_session(id))
 
         else:
             await bot.send_message(message['from']['id'], 'Ждите своего хода.',
-                                   reply_markup=get_keyboard_for_session(memory['match_id']))
+                                   reply_markup=get_keyboard_for_session(id))
 
 
 async def register_handlers(dp):
@@ -100,9 +138,10 @@ async def register_handlers(dp):
     dp.register_message_handler(wait_for_id, Text(
         equals='Join session'), state=None)
     dp.register_message_handler(join, state=MatchState.wait_for_id)
-    dp.register_message_handler(match, state=MatchState.match_circle)
-    dp.register_message_handler(match, state=MatchState.match_cross)
-
+    dp.register_message_handler(
+        match, state=MatchState.match_circle, content_types=[ContentType.TEXT, ContentType.VOICE])
+    dp.register_message_handler(
+        match, state=MatchState.match_cross, content_types=[ContentType.TEXT, ContentType.VOICE])
 
 executor.start_polling(dp, skip_updates=True,
                        on_startup=register_handlers)
